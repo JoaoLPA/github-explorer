@@ -1,7 +1,7 @@
-import React, { useState, FormEvent } from 'react';
-
+import React, { useState, useEffect, FormEvent } from 'react';
+import { Link } from 'react-router-dom';
 import { RiArrowRightSLine } from 'react-icons/ri';
-import { Title, Form, Repositories } from './styles';
+import { Title, Form, Repositories, Error } from './styles';
 
 import api from '../../Services/api';
 
@@ -18,26 +18,53 @@ interface Repository {
 
 const Dashboard: React.FC = () => {
   const [newRepo, setNewRepo] = useState('');
-  const [repositories, setRepositories] = useState<Repository[]>([]);
+  const [inputError, setInputError] = useState('');
+  const [repositories, setRepositories] = useState<Repository[]>(() => {
+    const storagedRepositories = localStorage.getItem(
+      '@GithubExplorer:repositories',
+    );
+
+    if (storagedRepositories) {
+      return JSON.parse(storagedRepositories);
+    }
+    return [];
+  });
+
+  useEffect(() => {
+    localStorage.setItem(
+      '@GithubExplorer:repositories',
+      JSON.stringify(repositories),
+    );
+  }, [repositories]);
 
   async function handdleAddRepository(
     event: FormEvent<HTMLFormElement>,
   ): Promise<void> {
     event.preventDefault();
 
-    const response = await api.get<Repository>(`repos/${newRepo}`);
+    if (!newRepo) {
+      setInputError('Procure no formato owner/repo');
+      return;
+    }
 
-    const repository = response.data;
+    try {
+      const response = await api.get<Repository>(`repos/${newRepo}`);
 
-    setRepositories([...repositories, repository]);
-    setNewRepo('');
+      const repository = response.data;
+
+      setRepositories([...repositories, repository]);
+      setNewRepo('');
+      setInputError('');
+    } catch (err) {
+      setInputError('Erro na busca por esse repositório');
+    }
   }
 
   return (
     <>
       <img src={logo} alt="logo" />
       <Title>Explore repositórios no Github</Title>
-      <Form onSubmit={handdleAddRepository}>
+      <Form hasError={!!inputError} onSubmit={handdleAddRepository}>
         <input
           placeholder="Digite aqui"
           value={newRepo}
@@ -45,9 +72,13 @@ const Dashboard: React.FC = () => {
         />
         <button type="submit">Pesquisar</button>
       </Form>
+      {inputError && <Error>{inputError}</Error>}
       <Repositories>
         {repositories.map(repository => (
-          <a key={repository.full_name} href="teste">
+          <Link
+            key={repository.full_name}
+            to={`/repository/${repository.full_name}`}
+          >
             <img
               src={repository.owner.avatar_url}
               alt={repository.owner.login}
@@ -57,7 +88,7 @@ const Dashboard: React.FC = () => {
               <p>{repository.description}</p>
             </div>
             <RiArrowRightSLine size={34} />
-          </a>
+          </Link>
         ))}
       </Repositories>
     </>
